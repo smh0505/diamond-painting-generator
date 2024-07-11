@@ -12,7 +12,6 @@
     "vue": "^3.4.29"
   },
   "devDependencies": {
-    "@biomejs/biome": "1.8.3",
     "@vitejs/plugin-vue": "^5.0.5",
     "typescript": "^5.2.2",
     "vite": "^5.3.1",
