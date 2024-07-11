@@ -1,0 +1,14 @@
+html,
+body {
+  margin: 0px;
+  padding: 0px;
+}
+
+#app {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  width: 100vw;
+  height: 100vh;
+}
