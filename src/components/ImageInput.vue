@@ -1,34 +1,40 @@
 <template>
   <section>
     <button @click="imageInput?.click()">Upload Image</button>
-    <input type="file" accept="image/*" @change="updateFile" ref="imageInput" hidden>
+    <input type="file" accept="image/*" @change="updateFile" ref="imageInput" hidden />
 
     <fieldset>
       <legend>Target</legend>
 
-      <input type="radio" name="width" v-model="direction" value="width">
+      <input type="radio" name="width" v-model="direction" value="width" />
       <label for="width" @click="direction = 'width'">Width</label>
-      <input 
-        type="number" 
-        name="width" 
-        min="0" 
-        v-model="width" 
-        :disabled="direction === 'height'" 
-        @input="height = Math.floor(width / ratio)"
-      >
+      <input
+        type="number"
+        name="width"
+        v-model="width"
+        :disabled="direction === 'height'"
+        @change="roundSize(direction)"
+      />
 
-      <input type="radio" name="height" v-model="direction" value="height">
+      <input type="radio" name="height" v-model="direction" value="height" />
       <label for="height" @click="direction = 'height'">Height</label>
-      <input 
-        type="number" 
-        name="height" 
-        min="0" 
-        v-model="height" 
-        :disabled="direction === 'width'" 
-        @input="width = Math.floor(height * ratio)"
-      >
+      <input
+        type="number"
+        name="height"
+        v-model="height"
+        :disabled="direction === 'width'"
+        @change="roundSize(direction)"
+      />
 
-      <button @click="updateSize">Update</button>
+      <br />
+      <label for="block">Block Size</label>
+      <input type="number" name="block" v-model="blockSize" @change="blockSize = clamp(blockSize, 2)" />
+
+      <br />
+      <label for="k"># Colors</label>
+      <input type="number" name="k" v-model="kValue" @change="kValue = clamp(kValue, 10)" />
+
+      <button @click="updateSize" :disabled="!imageUrl">Update</button>
     </fieldset>
   </section>
 </template>
@@ -43,25 +49,27 @@ const direction = ref<"width" | "height">("width");
 const width = ref(0);
 const height = ref(0);
 const ratio = ref(1);
+const blockSize = ref(8);
+const kValue = ref(20);
 
 // Props and Emits
 const props = defineProps({
-  size: Array<number>,
+  size: { type: Array<number>, required: true },
+  block: { type: Number, required: true },
+  k: { type: Number, required: true },
 });
 
-watch(
-  () => props.size,
-  (newSize) => {
-    if (!newSize || newSize.length < 3) return;
-    width.value = newSize[0];
-    height.value = newSize[1];
-    ratio.value = newSize[2];
-  },
-);
+watch(props, (props) => {
+  width.value = props.size[0];
+  height.value = props.size[1];
+  ratio.value = props.size[2];
+  blockSize.value = props.block;
+  kValue.value = props.k;
+});
 
 const emit = defineEmits<{
   return: [url: string];
-  update: [width: number, height: number];
+  update: [width: number, height: number, block: number, k: number];
 }>();
 
 // Methods
@@ -76,7 +84,23 @@ function updateFile(e: Event) {
 }
 
 function updateSize() {
-  emit("update", width.value, height.value);
+  emit("update", width.value, height.value, blockSize.value, kValue.value);
+}
+
+function roundSize(direction: "width" | "height") {
+  switch (direction) {
+    case "width":
+      width.value = Math.floor(width.value);
+      height.value = Math.floor(width.value / ratio.value);
+      break;
+    case "height":
+      height.value = Math.floor(height.value);
+      width.value = Math.floor(height.value * ratio.value);
+  }
+}
+
+function clamp(value: number, min: number) {
+  return Math.floor(Math.max(value, min))
 }
 </script>
 
@@ -90,11 +114,11 @@ section {
 
 fieldset {
   display: grid;
-  grid-template-columns: 1.75rem 4rem 1fr;
+  grid-template-columns: 1.75rem 6rem 1fr;
   row-gap: 0.5rem;
 }
 
-fieldset input[type=radio] {
+fieldset input[type="radio"] {
   margin-right: 0.5rem;
 }
 
