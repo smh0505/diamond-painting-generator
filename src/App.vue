@@ -1,5 +1,11 @@
 <template>
-  <ImageInput @return="handleReturn" @update="resizeData" @download="download" v-bind="inputProp"></ImageInput>
+  <ImageInput
+    @return="handleReturn"
+    @update="resizeData"
+    @download="downloadUnlabeled"
+    @blueprint="downloadLabeled"
+    v-bind="inputProp"
+  ></ImageInput>
   <canvas ref="canvas"></canvas>
 
   <section id="palette" v-if="inputProp.isReady">
@@ -21,6 +27,7 @@
 import ImageInput from "./components/ImageInput.vue";
 import { onMounted, Ref, ref } from "vue";
 import { Color } from "./scripts/types";
+import { draw, refresh, label, download } from "./scripts/CanvasProcess";
 
 // Data
 const image = document.createElement("img");
@@ -32,7 +39,7 @@ image.onload = () => {
 const imageData = document.createElement("canvas");
 const canvas = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>;
 const colorList = ref<Array<Color>>();
-let colorIdx: Uint16Array
+let colorIdx: Uint16Array;
 
 const inputProp = ref({
   size: [0, 0, 0],
@@ -47,7 +54,7 @@ let canvasCtx: CanvasRenderingContext2D;
 const worker = new Worker(new URL("./scripts/ImageWorker.ts", import.meta.url), { type: "module" });
 
 // Methods
-const getStyle = (color: Color) => ({backgroundColor: `rgb(${color.rgb[0]} ${color.rgb[1]} ${color.rgb[2]})`})
+const getStyle = (color: Color) => ({ backgroundColor: `rgb(${color.rgb[0]} ${color.rgb[1]} ${color.rgb[2]})` });
 
 function resizeData(width?: number, height?: number, block?: number, k?: number) {
   if (width) inputProp.value.size[0] = width;
@@ -55,18 +62,14 @@ function resizeData(width?: number, height?: number, block?: number, k?: number)
   if (block) inputProp.value.block = block;
   if (k) inputProp.value.k = k;
 
-  imageData.width = inputProp.value.size[0];
-  imageData.height = inputProp.value.size[1];
-  dataCtx.drawImage(image, 0, 0, imageData.width, imageData.height);
+  draw(image, dataCtx, 1, inputProp.value.size[0], inputProp.value.size[1]);
   resizeDisplay();
   convert();
 }
 
 function resizeDisplay() {
   const scale = Math.min(window.innerWidth / imageData.width, window.innerHeight / imageData.height);
-  canvas.value.width = imageData.width * scale * 0.8;
-  canvas.value.height = imageData.height * scale * 0.8;
-  canvasCtx.drawImage(imageData, 0, 0, canvas.value.width, canvas.value.height);
+  draw(imageData, canvasCtx, scale * 0.8);
 }
 
 function convert() {
@@ -87,10 +90,8 @@ function convert() {
     const { result, resWidth, resHeight, resColors, resIdx } = e.data;
 
     colorList.value = resColors;
-    colorIdx = resIdx
-    imageData.width = resWidth;
-    imageData.height = resHeight;
-    dataCtx.putImageData(new ImageData(result, resWidth, resHeight), 0, 0);
+    colorIdx = resIdx;
+    refresh(result, dataCtx, resWidth, resHeight);
 
     resizeDisplay();
     inputProp.value.isReady = true;
@@ -98,16 +99,18 @@ function convert() {
   };
 }
 
-function download() {
-  imageData.toBlob((blob) => {
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.download = "image.png";
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, "image/png");
+function downloadUnlabeled() {
+  download(imageData);
+}
+
+function downloadLabeled() {
+  const blueprint = document.createElement("canvas");
+  const ctx = blueprint.getContext("2d") as CanvasRenderingContext2D;
+
+  draw(imageData, ctx, 1);
+  label(ctx, colorIdx);
+  download(blueprint);
+  blueprint.remove();
 }
 
 function handleReturn(url: string) {

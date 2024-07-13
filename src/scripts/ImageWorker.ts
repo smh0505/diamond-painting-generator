@@ -185,13 +185,13 @@ function kMeansClustering(
  * @return {Omit<Result, "colors" | "indices">} Scaled image data in 1D array
  */
 function rescale(imgData: Uint8ClampedArray, width: number, height: number): Omit<Result, "colors" | "indices"> {
-  const [outputWidth, outputHeight] = [width * 8, height * 8];
+  const [outputWidth, outputHeight] = [width * 24, height * 24];
   const output = new Uint8ClampedArray(outputWidth * outputHeight * 4);
 
   for (let y = 0; y < outputHeight; y++) {
     for (let x = 0; x < outputWidth; x++) {
-      const srcX = Math.floor(x / 8);
-      const srcY = Math.floor(y / 8);
+      const srcX = Math.floor(x / 24);
+      const srcY = Math.floor(y / 24);
       const srcIdx = (srcY * width + srcX) * 4;
       const idx = (y * outputWidth + x) * 4;
 
@@ -243,5 +243,5 @@ self.onmessage = (e) => {
   const { data: pixel, width: pixelWidth, height: pixelHeight } = pixelate(imgData, width, height, blockSize);
   const { data: clust, colors: resColors, indices: resIdx } = kMeansClustering(pixel, pixelWidth, pixelHeight, k);
   const { data: result, width: resWidth, height: resHeight } = rescale(clust, pixelWidth, pixelHeight);
-  self.postMessage({ result, resWidth, resHeight, resColors, resIdx }, [result.buffer]);
+  self.postMessage({ result, resWidth, resHeight, resColors, resIdx }, [result.buffer, resIdx.buffer]);
 };

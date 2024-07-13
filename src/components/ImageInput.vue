@@ -37,6 +37,8 @@
       <button @click="updateSize" :disabled="!isReady">Update</button>
 
       <button @click="emitDownload" :disabled="!isReady">Download</button>
+
+      <button @click="emitBlueprint" :disabled="!isReady">Blueprint</button>
     </fieldset>
   </section>
 </template>
@@ -75,6 +77,7 @@ const emit = defineEmits<{
   return: [url: string];
   update: [width: number, height: number, block: number, k: number];
   download: [];
+  blueprint: []
 }>();
 
 const updateFile = (e: Event) => {
@@ -90,6 +93,8 @@ const updateFile = (e: Event) => {
 const updateSize = () => emit("update", width.value, height.value, blockSize.value, kValue.value);
 
 const emitDownload = () => emit("download");
+
+const emitBlueprint = () => emit("blueprint")
 
 // Methods
 function roundSize(direction: "width" | "height") {
