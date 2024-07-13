@@ -9,13 +9,14 @@
  * [..., [..., [k_ij0, k_ij1, k_ij2, k_ij3], ...], ...]
  */
 
-type Pixel = [number, number, number];
-interface Result {
-  data: Uint8ClampedArray;
-  width: number;
-  height: number;
-  colors: Pixel[];
-}
+import DMC from "./DMC.json";
+import { type Pixel, Color, Result } from "./types";
+
+const dmcColors: Color[] = DMC.map((color) => ({
+  code: String(color.floss),
+  name: color.name,
+  rgb: [color.r, color.g, color.b],
+}));
 
 /**
  * @param {Uint8ClampedArray} arr Given array
@@ -159,18 +160,20 @@ function kMeansClustering(
     }
   }
 
+  const outputColors = findNearestColor(centroids);
+
   const output = new Uint8ClampedArray(imgData.length);
   for (let i = 0, j = 0; i < pixelCount; i++, j += 4) {
-    const centroid = centroids[assignments[i]];
-    output[j] = centroid[0];
-    output[j + 1] = centroid[1];
-    output[j + 2] = centroid[2];
+    const color = outputColors[assignments[i]].rgb;
+    output[j] = color[0];
+    output[j + 1] = color[1];
+    output[j + 2] = color[2];
     output[j + 3] = imgData[j + 3];
   }
 
   return {
     data: output,
-    colors: centroids,
+    colors: outputColors,
   };
 }
 
@@ -181,14 +184,14 @@ function kMeansClustering(
  * @param {number} blockSize Size of unit square block
  * @return {Omit<Result, "colors">} Scaled image data in 1D array
  */
-function rescale(imgData: Uint8ClampedArray, width: number, height: number, blockSize: number): Omit<Result, "colors"> {
-  const [outputWidth, outputHeight] = [width * blockSize, height * blockSize];
+function rescale(imgData: Uint8ClampedArray, width: number, height: number): Omit<Result, "colors"> {
+  const [outputWidth, outputHeight] = [width * 8, height * 8];
   const output = new Uint8ClampedArray(outputWidth * outputHeight * 4);
 
   for (let y = 0; y < outputHeight; y++) {
     for (let x = 0; x < outputWidth; x++) {
-      const srcX = Math.floor(x / blockSize);
-      const srcY = Math.floor(y / blockSize);
+      const srcX = Math.floor(x / 8);
+      const srcY = Math.floor(y / 8);
       const srcIdx = (srcY * width + srcX) * 4;
       const idx = (y * outputWidth + x) * 4;
 
@@ -206,10 +209,39 @@ function rescale(imgData: Uint8ClampedArray, width: number, height: number, bloc
   };
 }
 
+/**
+ * @param {Pixel[]} colors Given colors
+ * @returns {Color[]} Nearest DMC colors to the given colors
+ */
+function findNearestColor(colors: Pixel[]) {
+  const result: Color[] = [];
+  const available = [...dmcColors];
+
+  for (const color of colors) {
+    if (!available.length) break;
+
+    let idx = 0;
+    let minDistance = euclideanDistance(color, available[0].rgb);
+
+    for (let i = 1; i < available.length; i++) {
+      const distance = euclideanDistance(color, available[i].rgb);
+      if (distance < minDistance) {
+        minDistance = distance;
+        idx = i;
+      }
+    }
+
+    result.push(available[idx]);
+    available.splice(idx, 1);
+  }
+
+  return result;
+}
+
 self.onmessage = (e) => {
   const { imgData, width, height, blockSize, k } = e.data;
   const { data: pixel, width: pixelWidth, height: pixelHeight } = pixelate(imgData, width, height, blockSize);
-  const { data: clust } = kMeansClustering(pixel, pixelWidth, pixelHeight, k);
-  const { data: result, width: resWidth, height: resHeight } = rescale(clust, pixelWidth, pixelHeight, blockSize);
-  self.postMessage({ result, resWidth, resHeight }, [result.buffer]);
+  const { data: clust, colors: resColors } = kMeansClustering(pixel, pixelWidth, pixelHeight, k);
+  const { data: result, width: resWidth, height: resHeight } = rescale(clust, pixelWidth, pixelHeight);
+  self.postMessage({ result, resWidth, resHeight, resColors }, [result.buffer]);
 };
