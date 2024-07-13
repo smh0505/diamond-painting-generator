@@ -34,7 +34,9 @@
       <label for="k"># Colors</label>
       <input type="number" name="k" v-model="kValue" @change="kValue = clamp(kValue, 10)" />
 
-      <button @click="updateSize" :disabled="!imageUrl">Update</button>
+      <button @click="updateSize" :disabled="!isReady">Update</button>
+      
+      <button @click="emitDownload" :disabled="!isReady">Download</button>
     </fieldset>
   </section>
 </template>
@@ -57,6 +59,7 @@ const props = defineProps({
   size: { type: Array<number>, required: true },
   block: { type: Number, required: true },
   k: { type: Number, required: true },
+  isReady: { type: Boolean, required: true },
 });
 
 watch(props, (props) => {
@@ -70,6 +73,7 @@ watch(props, (props) => {
 const emit = defineEmits<{
   return: [url: string];
   update: [width: number, height: number, block: number, k: number];
+  download: []
 }>();
 
 // Methods
@@ -87,6 +91,10 @@ function updateSize() {
   emit("update", width.value, height.value, blockSize.value, kValue.value);
 }
 
+function emitDownload() {
+  emit("download")
+}
+
 function roundSize(direction: "width" | "height") {
   switch (direction) {
     case "width":
@@ -100,7 +108,7 @@ function roundSize(direction: "width" | "height") {
 }
 
 function clamp(value: number, min: number) {
-  return Math.floor(Math.max(value, min))
+  return Math.floor(Math.max(value, min));
 }
 </script>
 
@@ -108,8 +116,13 @@ function clamp(value: number, min: number) {
 section {
   position: absolute;
   margin: 1rem;
+  padding: 1rem;
   top: 0px;
   left: 0px;
+
+  background-color: white;
+  border-radius: 1rem;
+  border: 2px solid black;
 }
 
 fieldset {

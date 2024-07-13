@@ -1,5 +1,5 @@
 <template>
-  <ImageInput @return="handleReturn" @update="resizeData" v-bind="inputProp"></ImageInput>
+  <ImageInput @return="handleReturn" @update="resizeData" @download="download" v-bind="inputProp"></ImageInput>
   <canvas ref="canvas"></canvas>
   <canvas ref="imageData" hidden></canvas>
   <img ref="image" @load="loadImage" hidden />
@@ -18,8 +18,11 @@ const inputProp = ref({
   size: [0, 0, 0],
   block: 8,
   k: 20,
+  isReady: false,
 });
 
+let dataCtx: CanvasRenderingContext2D | null;
+let canvasCtx: CanvasRenderingContext2D | null;
 const worker = new Worker(new URL("./scripts/ImageWorker.ts", import.meta.url));
 
 // Methods
@@ -30,7 +33,7 @@ function loadImage() {
 }
 
 function resizeData(width?: number, height?: number, block?: number, k?: number) {
-  if (!imageData.value) return;
+  if (!image.value || !imageData.value || !dataCtx) return;
   if (width) inputProp.value.size[0] = width;
   if (height) inputProp.value.size[1] = height;
   if (block) inputProp.value.block = block;
@@ -38,46 +41,57 @@ function resizeData(width?: number, height?: number, block?: number, k?: number)
 
   imageData.value.width = inputProp.value.size[0];
   imageData.value.height = inputProp.value.size[1];
+  dataCtx.drawImage(image.value, 0, 0, imageData.value.width, imageData.value.height);
+  resizeDisplay();
   convert();
 }
 
 function resizeDisplay() {
-  let ctx: CanvasRenderingContext2D | null;
-  if (!imageData.value || !canvas.value || !(ctx = canvas.value.getContext("2d"))) return;
+  if (!imageData.value || !canvas.value || !canvasCtx) return;
   const scale = Math.min(window.innerWidth / imageData.value.width, window.innerHeight / imageData.value.height);
   canvas.value.width = imageData.value.width * scale * 0.8;
   canvas.value.height = imageData.value.height * scale * 0.8;
-  ctx.drawImage(imageData.value, 0, 0, canvas.value.width, canvas.value.height);
+  canvasCtx.drawImage(imageData.value, 0, 0, canvas.value.width, canvas.value.height);
 }
 
 function convert() {
-  let ctx: CanvasRenderingContext2D | null;
-  if (!image.value || !imageData.value || !(ctx = imageData.value.getContext("2d", { willReadFrequently: true })))
-    return;
+  if (!image.value || !imageData.value || !dataCtx) return;
 
-  ctx.drawImage(image.value, 0, 0, imageData.value.width, imageData.value.height);
-  let data = ctx.getImageData(0, 0, imageData.value.width, imageData.value.height).data;
+  inputProp.value.isReady = false;
+  let data = dataCtx.getImageData(0, 0, imageData.value.width, imageData.value.height).data;
   worker.postMessage(
     {
       imgData: data,
       width: imageData.value.width,
       height: imageData.value.height,
-      channels: 4,
-      stoneSize: inputProp.value.block,
+      blockSize: inputProp.value.block,
+      k: inputProp.value.k,
     },
     [data.buffer]
   );
 
   worker.onmessage = (e) => {
-    if (!imageData.value) return;
-    const stoned = e.data as Uint8ClampedArray;
-    const [width, height] = [
-      Math.ceil(imageData.value.width / inputProp.value.block),
-      Math.ceil(imageData.value.height / inputProp.value.block),
-    ];
-    ctx.putImageData(new ImageData(stoned, width, height), 0, 0);
+    if (!imageData.value || !dataCtx) return;
+    const { result, resWidth, resHeight } = e.data;
+    imageData.value.width = resWidth;
+    imageData.value.height = resHeight;
+    dataCtx.putImageData(new ImageData(result, resWidth, resHeight), 0, 0);
     resizeDisplay();
+    inputProp.value.isReady = true;
   };
+}
+
+function download() {
+  if (!imageData.value) return;
+  imageData.value.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.download = "image.png";
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
 }
 
 function handleReturn(url: string) {
@@ -86,6 +100,9 @@ function handleReturn(url: string) {
 }
 
 onMounted(() => {
+  if (!imageData.value || !canvas.value) return;
   window.onresize = resizeDisplay;
+  dataCtx = imageData.value.getContext("2d", { willReadFrequently: true });
+  canvasCtx = canvas.value.getContext("2d");
 });
 </script>
