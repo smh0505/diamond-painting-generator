@@ -42,14 +42,14 @@ function euclideanDistance(a: number[], b: number[]): number {
  * @param {number} width Width of original image
  * @param {number} height Height of original image
  * @param {number} blockSize Size of unit square block
- * @return {Omit<Result, "colors">} Pixelated image data in 1D array
+ * @return {Omit<Result, "colors" | "indices">} Pixelated image data in 1D array
  */
 function pixelate(
   imgData: Uint8ClampedArray,
   width: number,
   height: number,
   blockSize: number
-): Omit<Result, "colors"> {
+): Omit<Result, "colors" | "indices"> {
   const [outputWidth, outputHeight] = [Math.ceil(width / blockSize), Math.ceil(height / blockSize)];
   const output = new Uint8ClampedArray(outputHeight * outputWidth * 4);
 
@@ -112,7 +112,7 @@ function kMeansClustering(
     pixels[i] = [imgData[j], imgData[j + 1], imgData[j + 2]];
   }
 
-  const assignments = new Uint8Array(pixelCount);
+  const assignments = new Uint16Array(pixelCount);
 
   // Initialize centroids randomly
   let centroids: Pixel[] = Array(k)
@@ -174,6 +174,7 @@ function kMeansClustering(
   return {
     data: output,
     colors: outputColors,
+    indices: assignments,
   };
 }
 
@@ -181,10 +182,9 @@ function kMeansClustering(
  * @param {Uint8ClampedArray} imgData Original image data in 1D array
  * @param {number} width Width of original image
  * @param {number} height Height of original image
- * @param {number} blockSize Size of unit square block
- * @return {Omit<Result, "colors">} Scaled image data in 1D array
+ * @return {Omit<Result, "colors" | "indices">} Scaled image data in 1D array
  */
-function rescale(imgData: Uint8ClampedArray, width: number, height: number): Omit<Result, "colors"> {
+function rescale(imgData: Uint8ClampedArray, width: number, height: number): Omit<Result, "colors" | "indices"> {
   const [outputWidth, outputHeight] = [width * 8, height * 8];
   const output = new Uint8ClampedArray(outputWidth * outputHeight * 4);
 
@@ -213,7 +213,7 @@ function rescale(imgData: Uint8ClampedArray, width: number, height: number): Omi
  * @param {Pixel[]} colors Given colors
  * @returns {Color[]} Nearest DMC colors to the given colors
  */
-function findNearestColor(colors: Pixel[]) {
+function findNearestColor(colors: Pixel[]): Color[] {
   const result: Color[] = [];
   const available = [...dmcColors];
 
@@ -241,7 +241,7 @@ function findNearestColor(colors: Pixel[]) {
 self.onmessage = (e) => {
   const { imgData, width, height, blockSize, k } = e.data;
   const { data: pixel, width: pixelWidth, height: pixelHeight } = pixelate(imgData, width, height, blockSize);
-  const { data: clust, colors: resColors } = kMeansClustering(pixel, pixelWidth, pixelHeight, k);
+  const { data: clust, colors: resColors, indices: resIdx } = kMeansClustering(pixel, pixelWidth, pixelHeight, k);
   const { data: result, width: resWidth, height: resHeight } = rescale(clust, pixelWidth, pixelHeight);
-  self.postMessage({ result, resWidth, resHeight, resColors }, [result.buffer]);
+  self.postMessage({ result, resWidth, resHeight, resColors, resIdx }, [result.buffer]);
 };

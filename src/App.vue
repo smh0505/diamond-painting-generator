@@ -1,8 +1,6 @@
 <template>
   <ImageInput @return="handleReturn" @update="resizeData" @download="download" v-bind="inputProp"></ImageInput>
   <canvas ref="canvas"></canvas>
-  <canvas ref="imageData" hidden></canvas>
-  <img ref="image" @load="loadImage" hidden />
 
   <section id="palette" v-if="inputProp.isReady">
     <div v-for="color in colorList" class="color">
@@ -21,14 +19,20 @@
 
 <script setup lang="ts">
 import ImageInput from "./components/ImageInput.vue";
-import { onMounted, ref } from "vue";
+import { onMounted, Ref, ref } from "vue";
 import { Color } from "./scripts/types";
 
 // Data
-const image = ref<HTMLImageElement>();
-const imageData = ref<HTMLCanvasElement>();
-const canvas = ref<HTMLCanvasElement>();
+const image = document.createElement("img");
+image.onload = () => {
+  inputProp.value.size = [image.width, image.height, image.width / image.height];
+  resizeData();
+};
+
+const imageData = document.createElement("canvas");
+const canvas = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>;
 const colorList = ref<Array<Color>>();
+let colorIdx: Uint16Array
 
 const inputProp = ref({
   size: [0, 0, 0],
@@ -38,49 +42,41 @@ const inputProp = ref({
 });
 const isLoading = ref(false);
 
-let dataCtx: CanvasRenderingContext2D | null;
-let canvasCtx: CanvasRenderingContext2D | null;
+const dataCtx = imageData.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
+let canvasCtx: CanvasRenderingContext2D;
 const worker = new Worker(new URL("./scripts/ImageWorker.ts", import.meta.url), { type: "module" });
 
 // Methods
-function loadImage() {
-  if (!image.value || !imageData.value) return;
-  inputProp.value.size = [image.value.width, image.value.height, image.value.width / image.value.height];
-  resizeData();
-}
+const getStyle = (color: Color) => ({backgroundColor: `rgb(${color.rgb[0]} ${color.rgb[1]} ${color.rgb[2]})`})
 
 function resizeData(width?: number, height?: number, block?: number, k?: number) {
-  if (!image.value || !imageData.value || !dataCtx) return;
   if (width) inputProp.value.size[0] = width;
   if (height) inputProp.value.size[1] = height;
   if (block) inputProp.value.block = block;
   if (k) inputProp.value.k = k;
 
-  imageData.value.width = inputProp.value.size[0];
-  imageData.value.height = inputProp.value.size[1];
-  dataCtx.drawImage(image.value, 0, 0, imageData.value.width, imageData.value.height);
+  imageData.width = inputProp.value.size[0];
+  imageData.height = inputProp.value.size[1];
+  dataCtx.drawImage(image, 0, 0, imageData.width, imageData.height);
   resizeDisplay();
   convert();
 }
 
 function resizeDisplay() {
-  if (!imageData.value || !canvas.value || !canvasCtx) return;
-  const scale = Math.min(window.innerWidth / imageData.value.width, window.innerHeight / imageData.value.height);
-  canvas.value.width = imageData.value.width * scale * 0.8;
-  canvas.value.height = imageData.value.height * scale * 0.8;
-  canvasCtx.drawImage(imageData.value, 0, 0, canvas.value.width, canvas.value.height);
+  const scale = Math.min(window.innerWidth / imageData.width, window.innerHeight / imageData.height);
+  canvas.value.width = imageData.width * scale * 0.8;
+  canvas.value.height = imageData.height * scale * 0.8;
+  canvasCtx.drawImage(imageData, 0, 0, canvas.value.width, canvas.value.height);
 }
 
 function convert() {
-  if (!image.value || !imageData.value || !dataCtx) return;
-
   inputProp.value.isReady = false;
-  let data = dataCtx.getImageData(0, 0, imageData.value.width, imageData.value.height).data;
+  let data = dataCtx.getImageData(0, 0, imageData.width, imageData.height).data;
   worker.postMessage(
     {
       imgData: data,
-      width: imageData.value.width,
-      height: imageData.value.height,
+      width: imageData.width,
+      height: imageData.height,
       blockSize: inputProp.value.block,
       k: inputProp.value.k,
     },
@@ -88,12 +84,12 @@ function convert() {
   );
 
   worker.onmessage = (e) => {
-    if (!imageData.value || !dataCtx) return;
-    const { result, resWidth, resHeight, resColors } = e.data;
+    const { result, resWidth, resHeight, resColors, resIdx } = e.data;
 
     colorList.value = resColors;
-    imageData.value.width = resWidth;
-    imageData.value.height = resHeight;
+    colorIdx = resIdx
+    imageData.width = resWidth;
+    imageData.height = resHeight;
     dataCtx.putImageData(new ImageData(result, resWidth, resHeight), 0, 0);
 
     resizeDisplay();
@@ -103,8 +99,7 @@ function convert() {
 }
 
 function download() {
-  if (!imageData.value) return;
-  imageData.value.toBlob((blob) => {
+  imageData.toBlob((blob) => {
     if (!blob) return;
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -115,23 +110,14 @@ function download() {
   }, "image/png");
 }
 
-function getStyle(color: Color) {
-  return {
-    backgroundColor: `rgb(${color.rgb[0]} ${color.rgb[1]} ${color.rgb[2]})`,
-  };
-}
-
 function handleReturn(url: string) {
-  if (!image.value) return;
   isLoading.value = true;
-  image.value.src = url;
+  image.src = url;
 }
 
 onMounted(() => {
-  if (!imageData.value || !canvas.value) return;
   window.onresize = resizeDisplay;
-  dataCtx = imageData.value.getContext("2d", { willReadFrequently: true });
-  canvasCtx = canvas.value.getContext("2d");
+  canvasCtx = canvas.value.getContext("2d") as CanvasRenderingContext2D;
 });
 </script>
 

@@ -11,4 +11,5 @@ export interface Result {
   width: number;
   height: number;
   colors: Color[];
+  indices: Uint16Array
 }

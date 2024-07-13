@@ -35,7 +35,7 @@
       <input type="number" name="k" v-model="kValue" @change="kValue = clamp(kValue, 10)" />
 
       <button @click="updateSize" :disabled="!isReady">Update</button>
-      
+
       <button @click="emitDownload" :disabled="!isReady">Download</button>
     </fieldset>
   </section>
@@ -54,7 +54,7 @@ const ratio = ref(1);
 const blockSize = ref(8);
 const kValue = ref(20);
 
-// Props and Emits
+// Props
 const props = defineProps({
   size: { type: Array<number>, required: true },
   block: { type: Number, required: true },
@@ -70,31 +70,28 @@ watch(props, (props) => {
   kValue.value = props.k;
 });
 
+// Emits
 const emit = defineEmits<{
   return: [url: string];
   update: [width: number, height: number, block: number, k: number];
-  download: []
+  download: [];
 }>();
 
-// Methods
-function updateFile(e: Event) {
+const updateFile = (e: Event) => {
   const target = e.target as HTMLInputElement;
-  if (!target || !target.files) return;
+  if (!target.files) return;
 
   URL.revokeObjectURL(imageUrl.value);
   imageUrl.value = URL.createObjectURL(target.files[0]);
 
   emit("return", imageUrl.value);
-}
+};
 
-function updateSize() {
-  emit("update", width.value, height.value, blockSize.value, kValue.value);
-}
+const updateSize = () => emit("update", width.value, height.value, blockSize.value, kValue.value);
 
-function emitDownload() {
-  emit("download")
-}
+const emitDownload = () => emit("download");
 
+// Methods
 function roundSize(direction: "width" | "height") {
   switch (direction) {
     case "width":
