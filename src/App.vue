@@ -9,9 +9,12 @@
   <canvas ref="canvas"></canvas>
 
   <section id="palette" v-if="inputProp.isReady">
-    <div v-for="color in colorList" class="color">
+    <div v-for="(color, index) in colorList" class="color">
+      <span>{{ index }}</span>
       <div class="preview" :style="getStyle(color)"></div>
-      <span>{{ color.code + " " + color.name }}</span>
+      <span>{{ color.code }}</span>
+      <span>{{ color.name }}</span>
+      <span style="text-align: right">{{ getCount(index) }}</span>
     </div>
   </section>
 
@@ -26,8 +29,8 @@
 <script setup lang="ts">
 import ImageInput from "./components/ImageInput.vue";
 import { onMounted, Ref, ref } from "vue";
-import { Color } from "./scripts/types";
-import { draw, refresh, label, download } from "./scripts/CanvasProcess";
+import { Color, RequestType } from "./scripts/types";
+import { draw, refresh, getDownloadUrl, download } from "./scripts/CanvasProcess";
 
 // Data
 const image = document.createElement("img");
@@ -36,8 +39,12 @@ image.onload = () => {
   resizeData();
 };
 
-const imageData = document.createElement("canvas");
+const imageData = new OffscreenCanvas(0, 0);
+const dataCtx = imageData.getContext("2d", { willReadFrequently: true }) as OffscreenCanvasRenderingContext2D;
+
 const canvas = ref<HTMLCanvasElement>() as Ref<HTMLCanvasElement>;
+let canvasCtx: CanvasRenderingContext2D;
+
 const colorList = ref<Array<Color>>();
 let colorIdx: Uint16Array;
 
@@ -49,12 +56,33 @@ const inputProp = ref({
 });
 const isLoading = ref(false);
 
-const dataCtx = imageData.getContext("2d", { willReadFrequently: true }) as CanvasRenderingContext2D;
-let canvasCtx: CanvasRenderingContext2D;
 const worker = new Worker(new URL("./scripts/ImageWorker.ts", import.meta.url), { type: "module" });
+worker.onmessage = (e) => {
+  switch (e.data.type as RequestType) {
+    case "pixelate":
+      const { data, width, height, colors, indices } = e.data;
+      colorIdx = indices;
+      colorList.value = Array.from(colors as Color[], (color) => ({
+        code: color.code,
+        name: color.name,
+        rgb: color.rgb,
+      }));      
+      refresh(data, dataCtx, width, height);
+      resizeDisplay();
+      break;
+    case "print":
+      const { url } = e.data;
+      download(url);
+      URL.revokeObjectURL(url);
+      alert("Complete!");
+  }
+  inputProp.value.isReady = true;
+  isLoading.value = false;
+};
 
 // Methods
 const getStyle = (color: Color) => ({ backgroundColor: `rgb(${color.rgb[0]} ${color.rgb[1]} ${color.rgb[2]})` });
+const getCount = (index: number) => colorIdx.filter((i) => i === index).length;
 
 function resizeData(width?: number, height?: number, block?: number, k?: number) {
   if (width) inputProp.value.size[0] = width;
@@ -77,7 +105,8 @@ function convert() {
   let data = dataCtx.getImageData(0, 0, imageData.width, imageData.height).data;
   worker.postMessage(
     {
-      imgData: data,
+      type: "pixelate",
+      img: data,
       width: imageData.width,
       height: imageData.height,
       blockSize: inputProp.value.block,
@@ -85,32 +114,27 @@ function convert() {
     },
     [data.buffer]
   );
-
-  worker.onmessage = (e) => {
-    const { result, resWidth, resHeight, resColors, resIdx } = e.data;
-
-    colorList.value = resColors;
-    colorIdx = resIdx;
-    refresh(result, dataCtx, resWidth, resHeight);
-
-    resizeDisplay();
-    inputProp.value.isReady = true;
-    isLoading.value = false;
-  };
 }
 
-function downloadUnlabeled() {
-  download(imageData);
+async function downloadUnlabeled() {
+  const url = await getDownloadUrl(imageData);
+  download(url);
+  URL.revokeObjectURL(url);
 }
 
 function downloadLabeled() {
-  const blueprint = document.createElement("canvas");
-  const ctx = blueprint.getContext("2d") as CanvasRenderingContext2D;
-
-  draw(imageData, ctx, 1);
-  label(ctx, colorIdx);
-  download(blueprint);
-  blueprint.remove();
+  isLoading.value = true;
+  let data = dataCtx.getImageData(0, 0, imageData.width, imageData.height).data;
+  worker.postMessage(
+    {
+      type: "print",
+      img: data,
+      width: imageData.width,
+      height: imageData.height,
+      indices: colorIdx,
+    },
+    [colorIdx.buffer]
+  );
 }
 
 function handleReturn(url: string) {
@@ -169,7 +193,8 @@ onMounted(() => {
 }
 
 .color {
-  display: flex;
+  display: grid;
+  grid-template-columns: 2rem 1.5rem 3.5rem 1fr 4rem;
   align-items: center;
   gap: 0.5rem;
 }

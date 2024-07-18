@@ -32,7 +32,7 @@
 
       <br />
       <label for="k"># Colors</label>
-      <input type="number" name="k" v-model="kValue" @change="kValue = clamp(kValue, 10)" />
+      <input type="number" name="k" v-model="kValue" @change="kValue = clamp(kValue, 10, 256)" />
 
       <button @click="updateSize" :disabled="!isReady">Update</button>
 
@@ -77,7 +77,7 @@ const emit = defineEmits<{
   return: [url: string];
   update: [width: number, height: number, block: number, k: number];
   download: [];
-  blueprint: []
+  blueprint: [];
 }>();
 
 const updateFile = (e: Event) => {
@@ -94,7 +94,7 @@ const updateSize = () => emit("update", width.value, height.value, blockSize.val
 
 const emitDownload = () => emit("download");
 
-const emitBlueprint = () => emit("blueprint")
+const emitBlueprint = () => emit("blueprint");
 
 // Methods
 function roundSize(direction: "width" | "height") {
@@ -109,8 +109,9 @@ function roundSize(direction: "width" | "height") {
   }
 }
 
-function clamp(value: number, min: number) {
-  return Math.floor(Math.max(value, min));
+function clamp(value: number, min: number, max?: number) {
+  const rounded = Math.round(value)
+  return max ? Math.max(Math.min(rounded, max), min) : Math.max(rounded, min);
 }
 </script>
 
