@@ -74,7 +74,6 @@ worker.onmessage = (e) => {
       const { url } = e.data;
       download(url);
       URL.revokeObjectURL(url);
-      alert("Complete!");
   }
   inputProp.value.isReady = true;
   isLoading.value = false;
