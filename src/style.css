@@ -1,3 +1,7 @@
+:root {
+  color-scheme: light dark;
+}
+
 html,
 body {
   margin: 0px;
@@ -11,4 +15,55 @@ body {
 
   width: 100vw;
   height: 100vh;
+}
+
+* {
+  background-color: light-dark(#e4eacf, #21231b);
+  color: light-dark(#414635, #ccd3b6);
+}
+
+section {
+  background-color: light-dark(#b3bb9d, #626950);
+  box-shadow: 2px 2px 6px #21231b;
+}
+
+section * {
+  background-color: transparent;
+}
+
+section input[type="number"] {
+  padding: 0.5rem;
+  border: 2px solid light-dark(#414635, #ccd3b6);
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+section input[type="number"]:disabled {
+  border: 2px solid light-dark(#ccd3b6, #414635);
+}
+
+section input[type="number"]:focus {
+  background-color: light-dark(#9ba384, #828b6a);
+  outline: none;
+}
+
+section button {
+  background-color: light-dark(#9ba384, #828b6a);
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  border: none;
+
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+section button:hover {
+  background-color: light-dark(#626950, #b3bb9d);
+  color: light-dark(#ccd3b6, #414635);
+}
+
+.light {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }
